@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encuentra tu asiento</title>
+
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    background-color: #5d4a3f;
+    padding: 40px 20px;
+    max-width: 500px;
+    margin: auto;
+    text-align: center;
+    color: #ffffff;
+  }
+
+  h1 {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
+
+  p {
+    font-size: 18px;
+    margin-bottom: 25px;
+  }
+
+  input {
+    width: 100%;
+    padding: 14px;
+    font-size: 18px;
+    border: none;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  .result {
+    margin-top: 30px;
+    font-size: 22px;
+    font-weight: bold;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>Encuentra tu asiento</h1>
+<p>Escribe tu nombre</p>
+
+<input
+  type="text"
+  id="search"
+  placeholder="Tu nombre..."
+/>
+
+<div class="result" id="result"></div>
+
+<script>
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoMmhwoXzjRBkurJsUYtlBOCd617e094rcsP2MXQUp2IpFMW15xEl_ejIWA94law/pubhtml";
+
+let guests = [];
+
+fetch(sheetURL)
+  .then(response => response.text())
+  .then(text => {
+    const lines = text.trim().split("\n");
+    lines.slice(1).forEach(row => {
+      const parts = row.split(",");
+      if (parts.length >= 2) {
+        guests.push({
+          name: parts[0].trim().toLowerCase(),
+          table: parts[1].trim()
+        });
+      }
+    });
+});
+
+document.getElementById("search").addEventListener("input", function () {
+  const query = this.value.toLowerCase().trim();
+  let output = "";
+
+  if (query) {
+    const match
