@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Encuentra tu asiento</title>
+
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    background-color: #5d4a3f;
+    padding: 40px 20px;
+    max-width: 500px;
+    margin: auto;
+    text-align: center;
+    color: #ffffff;
+  }
+
+  h1 {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
+
+  p {
+    font-size: 18px;
+    margin-bottom: 25px;
+  }
+
+  input {
+    width: 100%;
+    padding: 14px;
+    font-size: 18px;
+    font-family: Georgia, "Times New Roman", serif;
+    border: none;
+    border-radius: 6px;
+    outline: none;
+  }
+
+  .result {
+    margin-top: 30px;
+    font-size: 22px;
+    font-weight: bold;
+  }
+</style>
+</head>
+
+<body>
+
+<h1>Encuentra tu asiento</h1>
+<p>Escribe tu nombre</p>
+
+<input
+  type="text"
+  id="search"
+  placeholder="Tu nombre..."
+/>
+
+<div class="result" id="result"></div>
+
+<script>
+// Published CSV link from Google Sheets (must end with output=csv)
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoMmhwoXzjRBkurJsUYtlBOCd617e094rcsP2MXQUp2IpFMW15xEl_ejIWA94law/pub?output=csv";
+
+let guests = [];
+
+// Helper: remove accents for searching
+function normalizeText(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+// Fetch and parse CSV
+fetch(sheetURL)
+  .then(res => res.text())
+  .then(text => {
+    const lines = text.trim().split("\n");
+    lines.slice(1).forEach(line => {
+      const parts = line.split(",");
+      if (parts.length >= 2) {
+        guests.push({
+          name: normalizeText(parts[0].replace(/"/g,'').trim()),
+          table: parts[1].replace(/"/g,'').trim()
+        });
+      }
+    });
+  })
+  .catch(err => console.error("Error fetching sheet:", err));
+
+// Search logic
+document.getElementById("search").addEventListener("input", function() {
+  const query = normalizeText(this.value.trim());
+  let output = "";
+
+  if (query) {
+    const match = guests.find(g => g.name.includes(query));
+    if (match) {
+      output = `Tu mesa es: ${match.table}`;
+    } else {
+      output = "Nombre no encontrado";
+    }
+  }
+
+  document.getElementById("result").innerText = output;
+});
+</script>
+
+</body>
+</html>
