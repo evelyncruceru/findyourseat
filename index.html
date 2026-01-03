@@ -9,21 +9,11 @@
   body {
     font-family: Georgia, "Times New Roman", serif;
     background-color: #5d4a3f;
-    margin: 0;
-    padding: 0;
-    color: #ffffff;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    text-align: center;
-  }
-
-  .container {
-    width: 90%;
+    padding: 40px 20px;
     max-width: 500px;
-    padding: 20px;
+    margin: auto;
+    text-align: center;
+    color: #ffffff;
   }
 
   h1 {
@@ -33,69 +23,88 @@
 
   p {
     font-size: 18px;
-    margin-bottom: 20px;
+    margin-bottom: 25px;
   }
 
   input {
     width: 100%;
-    padding: 18px;
+    padding: 14px;
     font-size: 18px;
     font-family: Georgia, "Times New Roman", serif;
     border: none;
-    border-radius: 10px;
+    border-radius: 6px;
     outline: none;
-    margin-bottom: 25px;
-    box-sizing: border-box;
   }
 
   .result {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: 100%;
-  }
-
-  .card {
-    background-color: rgba(255,255,255,0.15);
-    padding: 14px 18px;
-    border-radius: 12px;
+    margin-top: 30px;
     font-size: 20px;
-    text-align: center;
-    opacity: 0;
-    transform: translateY(10px);
-    animation: fadeIn 0.4s forwards;
-  }
-
-  .table-number {
-    font-size: 24px;
     font-weight: bold;
-    margin-top: 4px;
-    color: #fff9c4; /* highlight */
-  }
-
-  @keyframes fadeIn {
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @media (max-width: 400px) {
-    h1 {
-      font-size: 24px;
-    }
-    p, input {
-      font-size: 16px;
-    }
-    .card {
-      font-size: 18px;
-    }
-    .table-number {
-      font-size: 22px;
-    }
+    text-align: left;
   }
 </style>
 </head>
 
 <body>
-<div class="c
+
+<h1>Encuentra tu asiento</h1>
+<p>Escribe tu nombre</p>
+
+<input
+  type="text"
+  id="search"
+  placeholder="Tu nombre..."
+/>
+
+<div class="result" id="result"></div>
+
+<script>
+// Your published CSV link
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoMmhwoXzjRBkurJsUYtlBOCd617e094rcsP2MXQUp2IpFMW15xEl_ejIWA94law/pub?output=csv";
+
+let guests = [];
+
+// Remove accents for search
+function normalizeText(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+// Fetch CSV and parse
+fetch(sheetURL)
+  .then(res => res.text())
+  .then(text => {
+    const lines = text.trim().split("\n");
+    lines.slice(1).forEach(line => {
+      const parts = line.split(",");
+      if (parts.length >= 2) {
+        guests.push({
+          name: parts[0].replace(/"/g,'').trim(),
+          normalizedName: normalizeText(parts[0].replace(/"/g,'').trim()),
+          table: parts[1].replace(/"/g,'').trim()
+        });
+      }
+    });
+  })
+  .catch(err => console.error("Error fetching sheet:", err));
+
+// Search logic
+document.getElementById("search").addEventListener("input", function() {
+  const query = normalizeText(this.value.trim());
+  let output = "";
+
+  if (query) {
+    // Find all matching guests
+    const matches = guests.filter(g => g.normalizedName.includes(query));
+    if (matches.length > 0) {
+      output = matches.map(g => `${g.name} - Mesa: ${g.table}`).join("<br>");
+    } else {
+      output = "Nombre no encontrado";
+    }
+  }
+
+  document.getElementById("result").innerHTML = output;
+});
+</script>
+
+</body>
+</html>
