@@ -30,6 +30,7 @@
     width: 100%;
     padding: 14px;
     font-size: 18px;
+    font-family: Georgia, "Times New Roman", serif;
     border: none;
     border-radius: 6px;
     outline: none;
@@ -57,10 +58,11 @@
 <div class="result" id="result"></div>
 
 <script>
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoMmhwoXzjRBkurJsUYtlBOCd617e094rcsP2MXQUp2IpFMW15xEl_ejIWA94law/pubhtml";
+const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSoMmhwoXzjRBkurJsUYtlBOCd617e094rcsP2MXQUp2IpFMW15xEl_ejIWA94law/pub?output=csv";
 
 let guests = [];
 
+// Fetch the CSV data from Google Sheets
 fetch(sheetURL)
   .then(response => response.text())
   .then(text => {
@@ -74,11 +76,25 @@ fetch(sheetURL)
         });
       }
     });
-});
+  });
 
+// Search logic
 document.getElementById("search").addEventListener("input", function () {
   const query = this.value.toLowerCase().trim();
   let output = "";
 
   if (query) {
-    const match
+    const match = guests.find(g => g.name.includes(query));
+    if (match) {
+      output = `Tu mesa es: ${match.table}`;
+    } else {
+      output = "Nombre no encontrado";
+    }
+  }
+
+  document.getElementById("result").innerText = output;
+});
+</script>
+
+</body>
+</html>
