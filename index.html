@@ -413,4 +413,12 @@ document.getElementById("closeMap").addEventListener("click", () => {
   mapOverlay.classList.remove("active");
 });
 resetBtn.addEventListener("click", openMapFullView);
-mapOverlay.addEventL
+mapOverlay.addEventListener("click", (e) => {
+  if (e.target === mapOverlay) {
+    mapOverlay.classList.remove("active");
+  }
+});
+</script>
+
+</body>
+</html>
