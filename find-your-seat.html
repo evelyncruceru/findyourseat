@@ -216,13 +216,15 @@
     border-radius: 14px;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
   }
 
   .map-modal img {
     display: block;
     width: 100%;
     height: auto;
-    transition: width 0.3s ease;
+    /* Slower, smoother zoom transition */
+    transition: width 1.4s cubic-bezier(0.65, 0, 0.35, 1);
     touch-action: pinch-zoom;
   }
 
@@ -382,6 +384,9 @@ function openMapFullView() {
   mapModal.scrollTop = 0;
 }
 
+// How long the map stays at full view before zooming in (ms)
+const FULL_VIEW_PAUSE = 700;
+
 function focusMapOnTable(tableNum) {
   mapOverlay.classList.add("active");
   const coords = TABLE_COORDS[tableNum];
@@ -393,19 +398,30 @@ function focusMapOnTable(tableNum) {
 
   resetBtn.classList.add("active");
 
-  // Zoom the image, then scroll so the table's coordinates sit centered
-  const zoomFactor = 3;
-  const zoomedWidth = mapModal.clientWidth * zoomFactor;
-  mapImage.style.width = zoomedWidth + "px";
+  // Step 1: reset to full map view so the whole layout is visible first
+  mapImage.style.width = "100%";
+  mapModal.scrollLeft = 0;
+  mapModal.scrollTop = 0;
 
-  // Wait a tick for layout to update with new width/height
-  requestAnimationFrame(() => {
-    const zoomedHeight = mapImage.clientHeight;
-    const targetX = (coords.x / 100) * zoomedWidth - mapModal.clientWidth / 2;
-    const targetY = (coords.y / 100) * zoomedHeight - mapModal.clientHeight / 2;
-    mapModal.scrollLeft = Math.max(0, targetX);
-    mapModal.scrollTop = Math.max(0, targetY);
-  });
+  // Step 2: after a pause, zoom in and glide over to the table
+  setTimeout(() => {
+    const zoomFactor = 3;
+    const zoomedWidth = mapModal.clientWidth * zoomFactor;
+    mapImage.style.width = zoomedWidth + "px";
+
+    // Wait a tick for the width transition to kick off and layout to update
+    requestAnimationFrame(() => {
+      const zoomedHeight = mapImage.clientHeight;
+      const targetX = (coords.x / 100) * zoomedWidth - mapModal.clientWidth / 2;
+      const targetY = (coords.y / 100) * zoomedHeight - mapModal.clientHeight / 2;
+
+      mapModal.scrollTo({
+        left: Math.max(0, targetX),
+        top: Math.max(0, targetY),
+        behavior: "smooth"
+      });
+    });
+  }, FULL_VIEW_PAUSE);
 }
 
 document.getElementById("openMap").addEventListener("click", openMapFullView);
