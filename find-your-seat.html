@@ -318,15 +318,13 @@ document.getElementById("search").addEventListener("input", function() {
         <div class="guest-name">${g.name}</div>
         <div class="guest-table-row">
           <span class="guest-table">Mesa ${g.table}</span>
-          <button class="view-on-map-btn" data-table="${g.table}">Ver su mesa en el mapa</button>
+          <button class="view-on-map-btn">Ver su mesa en el mapa</button>
         </div>
       `;
+      card.querySelector(".view-on-map-btn").addEventListener("click", () => {
+        focusMapOnTable(g.table);
+      });
       resultDiv.appendChild(card);
-    });
-
-    // Wire up the per-card map buttons
-    resultDiv.querySelectorAll(".view-on-map-btn").forEach(btn => {
-      btn.addEventListener("click", openMap);
     });
   } else {
     resultDiv.innerHTML = `<div class="no-results">Nombre no encontrado</div>`;
@@ -348,6 +346,92 @@ function openMap() {
 
 function closeMap() {
   mapOverlay.classList.remove("active");
+}
+
+// Exact pixel coordinates of each table's center on the source image.
+const TABLE_COORDS = {
+  "1":  { x: 514,  y: 1641 }, "2":  { x: 1239, y: 1599 }, "3":  { x: 2058, y: 1599 }, "4":  { x: 2867, y: 1624 }, "5":  { x: 3669, y: 1599 },
+  "6":  { x: 497,  y: 2491 }, "7":  { x: 1256, y: 2475 }, "8":  { x: 2058, y: 2508 }, "9":  { x: 2884, y: 2525 }, "10": { x: 3644, y: 2525 },
+  "11": { x: 497,  y: 3434 }, "12": { x: 1273, y: 3409 }, "13": { x: 2032, y: 3451 }, "14": { x: 2910, y: 3451 }, "15": { x: 3644, y: 3434 },
+  "16": { x: 514,  y: 4192 }, "17": { x: 1299, y: 4192 }, "18": { x: 2091, y: 4192 }, "19": { x: 2867, y: 4192 }, "20": { x: 3669, y: 4192 },
+  "21": { x: 2091, y: 5042 }, "22": { x: 2910, y: 5042 }
+};
+
+// How long the zoom-and-glide animation takes (ms)
+const ZOOM_DURATION = 1400;
+// How far to zoom in, relative to the container width
+const ZOOM_FACTOR = 3;
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// Width needed to fit the ENTIRE map inside the modal (both dimensions),
+// like object-fit: contain — this is the "whole map" starting view.
+function getFitWidth() {
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
+  const naturalWidth = mapImage.naturalWidth || containerWidth;
+  const naturalHeight = mapImage.naturalHeight || containerHeight;
+  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+  return naturalWidth * fitScale;
+}
+
+// Animates the image width and scroll position together, frame by frame,
+// starting from the whole-map fit view and ending zoomed in on the table.
+// After the animation finishes, the person can still pinch/scroll to adjust
+// further — this only sets the starting point for them.
+function animateZoomToTable(coords) {
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
+  const naturalWidth = mapImage.naturalWidth || containerWidth;
+  const naturalHeight = mapImage.naturalHeight || containerHeight;
+
+  const startWidth = getFitWidth();
+  const finalWidth = containerWidth * ZOOM_FACTOR;
+  const startTime = performance.now();
+
+  function frame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / ZOOM_DURATION, 1);
+    const eased = easeInOutCubic(t);
+
+    const currentWidth = startWidth + (finalWidth - startWidth) * eased;
+    mapImage.style.width = currentWidth + "px";
+
+    const scale = currentWidth / naturalWidth;
+    const currentHeight = naturalHeight * scale;
+
+    const targetX = coords.x * scale - containerWidth / 2;
+    const targetY = coords.y * scale - containerHeight / 2;
+
+    const maxScrollX = Math.max(0, currentWidth - containerWidth);
+    const maxScrollY = Math.max(0, currentHeight - containerHeight);
+
+    mapModal.scrollLeft = Math.min(Math.max(0, targetX), maxScrollX);
+    mapModal.scrollTop = Math.min(Math.max(0, targetY), maxScrollY);
+
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    }
+  }
+
+  mapImage.style.width = startWidth + "px";
+  mapModal.scrollLeft = 0;
+  mapModal.scrollTop = 0;
+  requestAnimationFrame(frame);
+}
+
+function focusMapOnTable(tableNum) {
+  mapOverlay.classList.add("active");
+  const coords = TABLE_COORDS[String(tableNum)];
+
+  if (!coords) {
+    openMap();
+    return;
+  }
+
+  animateZoomToTable(coords);
 }
 
 document.getElementById("openMap").addEventListener("click", openMap);
