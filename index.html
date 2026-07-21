@@ -223,8 +223,6 @@
     display: block;
     width: 100%;
     height: auto;
-    /* Slower, smoother zoom transition */
-    transition: width 1.4s cubic-bezier(0.65, 0, 0.35, 1);
     touch-action: pinch-zoom;
   }
 
@@ -324,14 +322,14 @@ fetch(sheetURL)
   })
   .catch(err => console.error("Error fetching sheet:", err));
 
-// Approximate table positions on the map image, as % of image width/height.
-// Adjust these if a table lands off-target once you test on the live map.
+// Exact pixel coordinates of each table's center, measured directly on the
+// full-resolution source image (4167 x 5893). These are precise, not estimated.
 const TABLE_COORDS = {
-  "1":  { x: 11, y: 26 }, "2":  { x: 30, y: 26 }, "3":  { x: 49, y: 26 }, "4":  { x: 68, y: 26 }, "5":  { x: 87, y: 26 },
-  "6":  { x: 11, y: 44 }, "7":  { x: 30, y: 44 }, "8":  { x: 49, y: 44 }, "9":  { x: 68, y: 44 }, "10": { x: 87, y: 44 },
-  "11": { x: 11, y: 62 }, "12": { x: 30, y: 62 }, "13": { x: 49, y: 62 }, "14": { x: 68, y: 62 }, "15": { x: 87, y: 62 },
-  "16": { x: 11, y: 80 }, "17": { x: 30, y: 80 }, "18": { x: 49, y: 80 }, "19": { x: 68, y: 80 }, "20": { x: 87, y: 80 },
-  "21": { x: 49, y: 95 }, "22": { x: 68, y: 95 }
+  "1":  { x: 514,  y: 1617 }, "2":  { x: 1277, y: 1616 }, "3":  { x: 2068, y: 1617 }, "4":  { x: 2900, y: 1622 }, "5":  { x: 3671, y: 1617 },
+  "6":  { x: 517,  y: 2517 }, "7":  { x: 1282, y: 2519 }, "8":  { x: 2069, y: 2520 }, "9":  { x: 2904, y: 2527 }, "10": { x: 3669, y: 2518 },
+  "11": { x: 514,  y: 3439 }, "12": { x: 1278, y: 3439 }, "13": { x: 2068, y: 3440 }, "14": { x: 2900, y: 3446 }, "15": { x: 3670, y: 3438 },
+  "16": { x: 517,  y: 4212 }, "17": { x: 1291, y: 4211 }, "18": { x: 2070, y: 4215 }, "19": { x: 2906, y: 4219 }, "20": { x: 3653, y: 4210 },
+  "21": { x: 2088, y: 5044 }, "22": { x: 2920, y: 5049 }
 };
 
 // Search logic
@@ -386,6 +384,54 @@ function openMapFullView() {
 
 // How long the map stays at full view before zooming in (ms)
 const FULL_VIEW_PAUSE = 700;
+// How long the zoom-and-glide animation itself takes (ms)
+const ZOOM_DURATION = 1400;
+// How far to zoom in, relative to the container width
+const ZOOM_FACTOR = 3;
+
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+// Animates the image width and the scroll position together, frame by frame,
+// so the target pixel always stays correctly aligned as the zoom progresses.
+function animateZoomToTable(coords) {
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
+  const naturalWidth = mapImage.naturalWidth || containerWidth;
+  const naturalHeight = mapImage.naturalHeight || containerHeight;
+
+  const startWidth = containerWidth;
+  const finalWidth = containerWidth * ZOOM_FACTOR;
+  const startTime = performance.now();
+
+  function frame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / ZOOM_DURATION, 1);
+    const eased = easeInOutCubic(t);
+
+    const currentWidth = startWidth + (finalWidth - startWidth) * eased;
+    mapImage.style.width = currentWidth + "px";
+
+    const scale = currentWidth / naturalWidth;
+    const currentHeight = naturalHeight * scale;
+
+    const targetX = coords.x * scale - containerWidth / 2;
+    const targetY = coords.y * scale - containerHeight / 2;
+
+    const maxScrollX = Math.max(0, currentWidth - containerWidth);
+    const maxScrollY = Math.max(0, currentHeight - containerHeight);
+
+    mapModal.scrollLeft = Math.min(Math.max(0, targetX), maxScrollX);
+    mapModal.scrollTop = Math.min(Math.max(0, targetY), maxScrollY);
+
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
 
 function focusMapOnTable(tableNum) {
   mapOverlay.classList.add("active");
@@ -399,28 +445,14 @@ function focusMapOnTable(tableNum) {
   resetBtn.classList.add("active");
 
   // Step 1: reset to full map view so the whole layout is visible first
-  mapImage.style.width = "100%";
+  const containerWidth = mapModal.clientWidth;
+  mapImage.style.width = containerWidth + "px";
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
 
-  // Step 2: after a pause, zoom in and glide over to the table
+  // Step 2: after a pause, zoom in and glide precisely to the table
   setTimeout(() => {
-    const zoomFactor = 3;
-    const zoomedWidth = mapModal.clientWidth * zoomFactor;
-    mapImage.style.width = zoomedWidth + "px";
-
-    // Wait a tick for the width transition to kick off and layout to update
-    requestAnimationFrame(() => {
-      const zoomedHeight = mapImage.clientHeight;
-      const targetX = (coords.x / 100) * zoomedWidth - mapModal.clientWidth / 2;
-      const targetY = (coords.y / 100) * zoomedHeight - mapModal.clientHeight / 2;
-
-      mapModal.scrollTo({
-        left: Math.max(0, targetX),
-        top: Math.max(0, targetY),
-        behavior: "smooth"
-      });
-    });
+    animateZoomToTable(coords);
   }, FULL_VIEW_PAUSE);
 }
 
