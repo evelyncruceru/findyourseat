@@ -376,7 +376,7 @@ const resetBtn = document.getElementById("resetMap");
 
 function openMapFullView() {
   mapOverlay.classList.add("active");
-  mapImage.style.width = "100%";
+  mapImage.style.width = getFitWidth() + "px";
   resetBtn.classList.remove("active");
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
@@ -391,18 +391,31 @@ function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+// Computes the image width needed to fit the ENTIRE map inside the modal
+// (both dimensions), like object-fit: contain. This is what makes the
+// starting view actually show the whole seating chart, not just the top of it.
+function getFitWidth() {
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
+  const naturalWidth = mapImage.naturalWidth || containerWidth;
+  const naturalHeight = mapImage.naturalHeight || containerHeight;
+  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+  return naturalWidth * fitScale;
+}
+
 // Animates the image width and the scroll position together, frame by frame.
-// Because the scroll target is recalculated from the *current* scale every
-// frame (not just the final scale), the view is already oriented toward the
-// target table from the very first frame — it glides straight there instead
-// of passing through an unrelated part of the map first.
+// Starts at the fully-fitted "whole map" size, ends zoomed in on the target
+// table. Because scroll is recalculated from the current scale every frame,
+// and the browser automatically clamps scrollLeft/scrollTop to 0 while the
+// image is still smaller than the container, the first frames naturally show
+// the whole map with nothing scrolled — then it zooms and glides to the table.
 function animateZoomToTable(coords) {
   const containerWidth = mapModal.clientWidth;
   const containerHeight = mapModal.clientHeight;
   const naturalWidth = mapImage.naturalWidth || containerWidth;
   const naturalHeight = mapImage.naturalHeight || containerHeight;
 
-  const startWidth = containerWidth;
+  const startWidth = getFitWidth();
   const finalWidth = containerWidth * ZOOM_FACTOR;
   const startTime = performance.now();
 
@@ -431,9 +444,11 @@ function animateZoomToTable(coords) {
     }
   }
 
-  // Reset to the un-zoomed starting size right before animating so every
-  // table click begins from the same baseline.
+  // Reset to the whole-map fit size right before animating so every
+  // table click begins by showing the full layout.
   mapImage.style.width = startWidth + "px";
+  mapModal.scrollLeft = 0;
+  mapModal.scrollTop = 0;
   requestAnimationFrame(frame);
 }
 
