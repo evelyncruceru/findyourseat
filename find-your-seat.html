@@ -377,8 +377,24 @@ function getFitWidth() {
   return naturalWidth * fitScale;
 }
 
+// For a table near the edge of the image, zooming in too far makes it
+// mathematically impossible to keep that table centered in the viewport —
+// the scroll position has nowhere further to go, so the view snaps to the
+// boundary and a neighboring table ends up centered instead. This computes
+// the maximum zoom level that still allows the given table to be perfectly
+// centered, given how close it is to the nearest edge.
+function computeMaxCenterableScale(coords, containerWidth, containerHeight, naturalWidth, naturalHeight) {
+  const marginX = Math.min(coords.x, naturalWidth - coords.x);
+  const marginY = Math.min(coords.y, naturalHeight - coords.y);
+  const scaleX = marginX > 0 ? containerWidth / (2 * marginX) : Infinity;
+  const scaleY = marginY > 0 ? containerHeight / (2 * marginY) : Infinity;
+  return Math.min(scaleX, scaleY);
+}
+
 // Animates the image width and scroll position together, frame by frame,
 // starting from the whole-map fit view and ending zoomed in on the table.
+// The final zoom level is capped per-table so edge tables stay centered
+// rather than clamping to the image boundary and showing a neighbor instead.
 // After the animation finishes, the person can still pinch/scroll to adjust
 // further — this only sets the starting point for them.
 function animateZoomToTable(coords) {
@@ -388,7 +404,12 @@ function animateZoomToTable(coords) {
   const naturalHeight = mapImage.naturalHeight || containerHeight;
 
   const startWidth = getFitWidth();
-  const finalWidth = containerWidth * ZOOM_FACTOR;
+
+  const desiredScale = (containerWidth * ZOOM_FACTOR) / naturalWidth;
+  const maxCenterableScale = computeMaxCenterableScale(coords, containerWidth, containerHeight, naturalWidth, naturalHeight);
+  const finalScale = Math.min(desiredScale, maxCenterableScale);
+  const finalWidth = naturalWidth * finalScale;
+
   const startTime = performance.now();
 
   function frame(now) {
