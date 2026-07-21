@@ -291,7 +291,7 @@
   <button class="map-close" id="closeMap">&times;</button>
   <button class="map-reset" id="resetMap">Ver mapa completo</button>
   <div class="map-modal" id="mapModal">
-    <img src="https://github.com/evelyncruceru/findyourseat/blob/0a5205ac7a23d0514579d067d7db16264f3a3e4b/Digital%20table%20seating.png" alt="Mapa de mesas" id="mapImage" />
+    <img src="https://raw.githubusercontent.com/evelyncruceru/findyourseat/19f8f34106fcadccfc641f840e90fb4f09f6e08a/Digital%20table%20seating.png" alt="Mapa de mesas" id="mapImage" />
   </div>
 </div>
 
@@ -327,11 +327,11 @@ fetch(sheetURL)
 // Approximate table positions on the map image, as % of image width/height.
 // Adjust these if a table lands off-target once you test on the live map.
 const TABLE_COORDS = {
-  "1":  { x: 11, y: 26 }, "2":  { x: 28, y: 26 }, "3":  { x: 46, y: 26 }, "4":  { x: 66, y: 26 }, "5":  { x: 87, y: 26 },
-  "6":  { x: 11, y: 44 }, "7":  { x: 28, y: 44 }, "8":  { x: 46, y: 44 }, "9":  { x: 66, y: 44 }, "10": { x: 87, y: 44 },
-  "11": { x: 11, y: 61 }, "12": { x: 28, y: 61 }, "13": { x: 46, y: 61 }, "14": { x: 66, y: 61 }, "15": { x: 87, y: 61 },
-  "16": { x: 11, y: 77 }, "17": { x: 28, y: 77 }, "18": { x: 46, y: 77 }, "19": { x: 66, y: 77 }, "20": { x: 87, y: 77 },
-  "21": { x: 46, y: 91 }, "22": { x: 66, y: 91 }
+  "1":  { x: 11, y: 26 }, "2":  { x: 30, y: 26 }, "3":  { x: 49, y: 26 }, "4":  { x: 68, y: 26 }, "5":  { x: 87, y: 26 },
+  "6":  { x: 11, y: 44 }, "7":  { x: 30, y: 44 }, "8":  { x: 49, y: 44 }, "9":  { x: 68, y: 44 }, "10": { x: 87, y: 44 },
+  "11": { x: 11, y: 62 }, "12": { x: 30, y: 62 }, "13": { x: 49, y: 62 }, "14": { x: 68, y: 62 }, "15": { x: 87, y: 62 },
+  "16": { x: 11, y: 80 }, "17": { x: 30, y: 80 }, "18": { x: 49, y: 80 }, "19": { x: 68, y: 80 }, "20": { x: 87, y: 80 },
+  "21": { x: 49, y: 95 }, "22": { x: 68, y: 95 }
 };
 
 // Search logic
