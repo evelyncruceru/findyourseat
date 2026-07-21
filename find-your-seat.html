@@ -382,9 +382,7 @@ function openMapFullView() {
   mapModal.scrollTop = 0;
 }
 
-// How long the map stays at full view before zooming in (ms)
-const FULL_VIEW_PAUSE = 700;
-// How long the zoom-and-glide animation itself takes (ms)
+// How long the zoom-and-glide animation takes (ms)
 const ZOOM_DURATION = 1400;
 // How far to zoom in, relative to the container width
 const ZOOM_FACTOR = 3;
@@ -393,8 +391,11 @@ function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-// Animates the image width and the scroll position together, frame by frame,
-// so the target pixel always stays correctly aligned as the zoom progresses.
+// Animates the image width and the scroll position together, frame by frame.
+// Because the scroll target is recalculated from the *current* scale every
+// frame (not just the final scale), the view is already oriented toward the
+// target table from the very first frame — it glides straight there instead
+// of passing through an unrelated part of the map first.
 function animateZoomToTable(coords) {
   const containerWidth = mapModal.clientWidth;
   const containerHeight = mapModal.clientHeight;
@@ -430,6 +431,9 @@ function animateZoomToTable(coords) {
     }
   }
 
+  // Reset to the un-zoomed starting size right before animating so every
+  // table click begins from the same baseline.
+  mapImage.style.width = startWidth + "px";
   requestAnimationFrame(frame);
 }
 
@@ -443,17 +447,7 @@ function focusMapOnTable(tableNum) {
   }
 
   resetBtn.classList.add("active");
-
-  // Step 1: reset to full map view so the whole layout is visible first
-  const containerWidth = mapModal.clientWidth;
-  mapImage.style.width = containerWidth + "px";
-  mapModal.scrollLeft = 0;
-  mapModal.scrollTop = 0;
-
-  // Step 2: after a pause, zoom in and glide precisely to the table
-  setTimeout(() => {
-    animateZoomToTable(coords);
-  }, FULL_VIEW_PAUSE);
+  animateZoomToTable(coords);
 }
 
 document.getElementById("openMap").addEventListener("click", openMapFullView);
