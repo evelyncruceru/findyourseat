@@ -223,7 +223,6 @@
     display: block;
     width: 100%;
     height: auto;
-    touch-action: pinch-zoom;
   }
 
   .map-close {
@@ -239,27 +238,6 @@
     font-size: 20px;
     cursor: pointer;
     z-index: 1001;
-  }
-
-  .map-reset {
-    position: fixed;
-    top: 18px;
-    left: 18px;
-    background-color: rgba(255, 255, 255, 0.15);
-    border: none;
-    color: #ffffff;
-    font-family: "Poppins", sans-serif;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 8px 14px;
-    border-radius: 18px;
-    cursor: pointer;
-    z-index: 1001;
-    display: none;
-  }
-
-  .map-reset.active {
-    display: inline-block;
   }
 </style>
 </head>
@@ -287,7 +265,6 @@
 <!-- Map modal -->
 <div class="map-overlay" id="mapOverlay">
   <button class="map-close" id="closeMap">&times;</button>
-  <button class="map-reset" id="resetMap">Ver mapa completo</button>
   <div class="map-modal" id="mapModal">
     <img src="https://raw.githubusercontent.com/evelyncruceru/findyourseat/19f8f34106fcadccfc641f840e90fb4f09f6e08a/Digital%20table%20seating.png" alt="Mapa de mesas" id="mapImage" />
   </div>
@@ -322,16 +299,6 @@ fetch(sheetURL)
   })
   .catch(err => console.error("Error fetching sheet:", err));
 
-// Exact pixel coordinates of each table's center, measured directly on the
-// full-resolution source image (4167 x 5893). These are precise, not estimated.
-const TABLE_COORDS = {
-  "1":  { x: 514,  y: 1617 }, "2":  { x: 1277, y: 1616 }, "3":  { x: 2068, y: 1617 }, "4":  { x: 2900, y: 1622 }, "5":  { x: 3671, y: 1617 },
-  "6":  { x: 517,  y: 2517 }, "7":  { x: 1282, y: 2519 }, "8":  { x: 2069, y: 2520 }, "9":  { x: 2904, y: 2527 }, "10": { x: 3669, y: 2518 },
-  "11": { x: 514,  y: 3439 }, "12": { x: 1278, y: 3439 }, "13": { x: 2068, y: 3440 }, "14": { x: 2900, y: 3446 }, "15": { x: 3670, y: 3438 },
-  "16": { x: 517,  y: 4212 }, "17": { x: 1291, y: 4211 }, "18": { x: 2070, y: 4215 }, "19": { x: 2906, y: 4219 }, "20": { x: 3653, y: 4210 },
-  "21": { x: 2088, y: 5044 }, "22": { x: 2920, y: 5049 }
-};
-
 // Search logic
 document.getElementById("search").addEventListener("input", function() {
   const query = normalizeText(this.value.trim());
@@ -359,9 +326,7 @@ document.getElementById("search").addEventListener("input", function() {
 
     // Wire up the per-card map buttons
     resultDiv.querySelectorAll(".view-on-map-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        focusMapOnTable(btn.dataset.table);
-      });
+      btn.addEventListener("click", openMap);
     });
   } else {
     resultDiv.innerHTML = `<div class="no-results">Nombre no encontrado</div>`;
@@ -372,107 +337,24 @@ document.getElementById("search").addEventListener("input", function() {
 const mapOverlay = document.getElementById("mapOverlay");
 const mapModal = document.getElementById("mapModal");
 const mapImage = document.getElementById("mapImage");
-const resetBtn = document.getElementById("resetMap");
 
-function openMapFullView() {
+function openMap() {
   mapOverlay.classList.add("active");
-  mapImage.style.width = getFitWidth() + "px";
-  resetBtn.classList.remove("active");
+  // Fit the whole map to the screen; the person can pinch/scroll to zoom in themselves.
+  mapImage.style.width = "100%";
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
 }
 
-// How long the zoom-and-glide animation takes (ms)
-const ZOOM_DURATION = 1400;
-// How far to zoom in, relative to the container width
-const ZOOM_FACTOR = 3;
-
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-// Computes the image width needed to fit the ENTIRE map inside the modal
-// (both dimensions), like object-fit: contain. This is what makes the
-// starting view actually show the whole seating chart, not just the top of it.
-function getFitWidth() {
-  const containerWidth = mapModal.clientWidth;
-  const containerHeight = mapModal.clientHeight;
-  const naturalWidth = mapImage.naturalWidth || containerWidth;
-  const naturalHeight = mapImage.naturalHeight || containerHeight;
-  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-  return naturalWidth * fitScale;
-}
-
-// Animates the image width and the scroll position together, frame by frame.
-// Starts at the fully-fitted "whole map" size, ends zoomed in on the target
-// table. Because scroll is recalculated from the current scale every frame,
-// and the browser automatically clamps scrollLeft/scrollTop to 0 while the
-// image is still smaller than the container, the first frames naturally show
-// the whole map with nothing scrolled — then it zooms and glides to the table.
-function animateZoomToTable(coords) {
-  const containerWidth = mapModal.clientWidth;
-  const containerHeight = mapModal.clientHeight;
-  const naturalWidth = mapImage.naturalWidth || containerWidth;
-  const naturalHeight = mapImage.naturalHeight || containerHeight;
-
-  const startWidth = getFitWidth();
-  const finalWidth = containerWidth * ZOOM_FACTOR;
-  const startTime = performance.now();
-
-  function frame(now) {
-    const elapsed = now - startTime;
-    const t = Math.min(elapsed / ZOOM_DURATION, 1);
-    const eased = easeInOutCubic(t);
-
-    const currentWidth = startWidth + (finalWidth - startWidth) * eased;
-    mapImage.style.width = currentWidth + "px";
-
-    const scale = currentWidth / naturalWidth;
-    const currentHeight = naturalHeight * scale;
-
-    const targetX = coords.x * scale - containerWidth / 2;
-    const targetY = coords.y * scale - containerHeight / 2;
-
-    const maxScrollX = Math.max(0, currentWidth - containerWidth);
-    const maxScrollY = Math.max(0, currentHeight - containerHeight);
-
-    mapModal.scrollLeft = Math.min(Math.max(0, targetX), maxScrollX);
-    mapModal.scrollTop = Math.min(Math.max(0, targetY), maxScrollY);
-
-    if (t < 1) {
-      requestAnimationFrame(frame);
-    }
-  }
-
-  // Reset to the whole-map fit size right before animating so every
-  // table click begins by showing the full layout.
-  mapImage.style.width = startWidth + "px";
-  mapModal.scrollLeft = 0;
-  mapModal.scrollTop = 0;
-  requestAnimationFrame(frame);
-}
-
-function focusMapOnTable(tableNum) {
-  mapOverlay.classList.add("active");
-  const coords = TABLE_COORDS[tableNum];
-
-  if (!coords) {
-    openMapFullView();
-    return;
-  }
-
-  resetBtn.classList.add("active");
-  animateZoomToTable(coords);
-}
-
-document.getElementById("openMap").addEventListener("click", openMapFullView);
-document.getElementById("closeMap").addEventListener("click", () => {
+function closeMap() {
   mapOverlay.classList.remove("active");
-});
-resetBtn.addEventListener("click", openMapFullView);
+}
+
+document.getElementById("openMap").addEventListener("click", openMap);
+document.getElementById("closeMap").addEventListener("click", closeMap);
 mapOverlay.addEventListener("click", (e) => {
   if (e.target === mapOverlay) {
-    mapOverlay.classList.remove("active");
+    closeMap();
   }
 });
 </script>
