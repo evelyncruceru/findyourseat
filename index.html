@@ -356,9 +356,11 @@ const TABLE_COORDS = {
   "21": { x: 2091, y: 5042 }, "22": { x: 2910, y: 5042 }
 };
 
-// How long the zoom-and-glide animation takes (ms)
+// How long the whole map is shown before zooming starts (ms)
+const HOLD_DURATION = 2000;
+// How long the zoom-in animation itself takes (ms)
 const ZOOM_DURATION = 1400;
-// How far to zoom in, relative to the container width
+// How far to zoom in, relative to the whole-map fit width
 const ZOOM_FACTOR = 3;
 
 function easeInOutCubic(t) {
@@ -376,85 +378,61 @@ function getFitWidth() {
   return naturalWidth * fitScale;
 }
 
-// For a table near the edge of the image, zooming in too far makes it
-// mathematically impossible to keep that table centered in the viewport —
-// the scroll position has nowhere further to go, so the view snaps to the
-// boundary and a neighboring table ends up centered instead. This computes
-// the maximum zoom level that still allows the given table to be perfectly
-// centered, given how close it is to the nearest edge.
-function computeMaxCenterableScale(coords, containerWidth, containerHeight, naturalWidth, naturalHeight) {
-  const marginX = Math.min(coords.x, naturalWidth - coords.x);
-  const marginY = Math.min(coords.y, naturalHeight - coords.y);
-  const scaleX = marginX > 0 ? containerWidth / (2 * marginX) : Infinity;
-  const scaleY = marginY > 0 ? containerHeight / (2 * marginY) : Infinity;
-  return Math.min(scaleX, scaleY);
-}
-
-// Animates the image width and scroll position together, frame by frame,
-// starting from the whole-map fit view and ending zoomed in on the table.
-// The final zoom level is capped per-table so edge tables stay centered
-// rather than clamping to the image boundary and showing a neighbor instead.
-// After the animation finishes, the person can still pinch/scroll to adjust
-// further — this only sets the starting point for them.
+// Shows the whole map for HOLD_DURATION ms, then smoothly scales the image
+// up from the fit scale to fit-scale * ZOOM_FACTOR. On every single frame,
+// the scroll position is recalculated straight from this table's x/y
+// coordinates at the CURRENT scale of that frame — never from a cached
+// start/end pixel offset — so the map zooms in as if that exact point is
+// pinned under the center of the screen the whole time. Because every
+// frame's target is derived independently from coords.x / coords.y, each
+// table zooms to its own correct spot regardless of which one was shown
+// previously.
 function animateZoomToTable(coords) {
 
   const containerWidth = mapModal.clientWidth;
   const containerHeight = mapModal.clientHeight;
-
   const naturalWidth = mapImage.naturalWidth;
   const naturalHeight = mapImage.naturalHeight;
 
-  // Whole-map width
-  const fitWidth = getFitWidth();
+  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+  const targetScale = fitScale * ZOOM_FACTOR;
 
-  // Final zoom width
-  const finalWidth = fitWidth * ZOOM_FACTOR;
-
-  // Show whole map first
-  mapImage.style.width = fitWidth + "px";
+  // Show the whole map first
+  mapImage.style.width = (naturalWidth * fitScale) + "px";
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
 
-  // Give people a moment to see the whole map
+  // Give people a moment to see the whole map before zooming in
   setTimeout(() => {
 
-    // Instantly zoom
-    mapImage.style.width = finalWidth + "px";
+    const startTime = performance.now();
 
-    // Wait for browser layout
-    requestAnimationFrame(() => {
+    function frame(now) {
+      const progress = Math.min((now - startTime) / ZOOM_DURATION, 1);
+      const eased = easeInOutCubic(progress);
 
-      const scale = finalWidth / naturalWidth;
+      // Scale grows smoothly from fitScale to targetScale
+      const currentScale = fitScale + (targetScale - fitScale) * eased;
+      mapImage.style.width = (naturalWidth * currentScale) + "px";
 
-      const targetX = coords.x * scale - containerWidth / 2;
-      const targetY = coords.y * scale - containerHeight / 2;
-
+      // Recompute this table's on-screen position at the current scale,
+      // and keep it centered — bounds are re-read every frame since the
+      // scrollable content size changes as the image grows.
       const maxScrollX = mapModal.scrollWidth - containerWidth;
       const maxScrollY = mapModal.scrollHeight - containerHeight;
 
-      const endX = Math.max(0, Math.min(targetX, maxScrollX));
-      const endY = Math.max(0, Math.min(targetY, maxScrollY));
+      const targetX = coords.x * currentScale - containerWidth / 2;
+      const targetY = coords.y * currentScale - containerHeight / 2;
 
-      const startX = mapModal.scrollLeft;
-      const startY = mapModal.scrollTop;
+      mapModal.scrollLeft = Math.max(0, Math.min(targetX, maxScrollX));
+      mapModal.scrollTop = Math.max(0, Math.min(targetY, maxScrollY));
 
-      const startTime = performance.now();
+      if (progress < 1) requestAnimationFrame(frame);
+    }
 
-      function animate(now) {
-        const progress = Math.min((now - startTime) / ZOOM_DURATION, 1);
-        const eased = easeInOutCubic(progress);
+    requestAnimationFrame(frame);
 
-        mapModal.scrollLeft = startX + (endX - startX) * eased;
-        mapModal.scrollTop = startY + (endY - startY) * eased;
-
-        if (progress < 1) requestAnimationFrame(animate);
-      }
-
-      requestAnimationFrame(animate);
-
-    });
-
-  }, 300);
+  }, HOLD_DURATION);
 
 }
 
