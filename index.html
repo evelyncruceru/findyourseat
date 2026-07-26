@@ -346,7 +346,6 @@ function openMap() {
     mapModal.scrollTop = 0;
 
 }
-}
 
 function closeMap() {
   mapOverlay.classList.remove("active");
@@ -483,13 +482,6 @@ function animateZoomToTable(coords) {
 }
 
     if (t < 1) {
-      requestAnimationFrame(frame);
-    }
-  }
-
-  mapImage.style.width = startWidth + "px";
-  mapModal.scrollLeft = 0;
-  mapModal.scrollTop = 0;
   requestAnimationFrame(frame);
 }
 
@@ -504,12 +496,8 @@ function focusMapOnTable(tableNum) {
         return;
     }
 
-    // Wait until modal is visible
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            animateZoomToTable(coords);
-        });
-    });
+animateZoomToTable(coords);
+}
 
 }
 
