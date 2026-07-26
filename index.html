@@ -336,7 +336,28 @@ const mapOverlay = document.getElementById("mapOverlay");
 const mapModal = document.getElementById("mapModal");
 const mapImage = document.getElementById("mapImage");
 
+// Every call to animateZoomToTable bumps this token and captures its own
+// copy. The pending setTimeout and the per-frame animation loop both check
+// their captured copy against the live value before doing anything — if
+// they don't match, a newer zoom (or a close) has superseded them and they
+// stop immediately instead of continuing to fight over scrollLeft/scrollTop.
+// Without this, closing the map or picking a different table before the
+// previous 2s-hold + zoom sequence fully finished left the old animation
+// running in the background, which is why the view could appear stuck on
+// whichever table was opened first.
+let zoomToken = 0;
+let pendingZoomTimeout = null;
+
+function cancelPendingZoom() {
+  zoomToken++;
+  if (pendingZoomTimeout) {
+    clearTimeout(pendingZoomTimeout);
+    pendingZoomTimeout = null;
+  }
+}
+
 function openMap() {
+  cancelPendingZoom();
   mapOverlay.classList.add("active");
   mapImage.style.width = getFitWidth() + "px";
   mapModal.scrollLeft = 0;
@@ -345,6 +366,7 @@ function openMap() {
 
 function closeMap() {
   mapOverlay.classList.remove("active");
+  cancelPendingZoom();
 }
 
 // Exact pixel coordinates of each table's center on the source image.
@@ -376,8 +398,10 @@ const ZOOM_DURATION = 1400;
 // room to scroll horizontally, which is why every table used to appear to
 // land at nearly the same X position while only Y moved. Deriving the
 // zoom scale from a fixed image-space width instead guarantees a proper,
-// independent scroll range on both axes for every table.
-const TABLE_VIEW_WIDTH = 1400;
+// independent scroll range on both axes for every table. Smaller = tighter
+// zoom on just that one table; larger = more of the surrounding tables
+// stay visible.
+const TABLE_VIEW_WIDTH = 900;
 
 function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -421,17 +445,29 @@ function animateZoomToTable(coords) {
   // unusually shaped container.
   targetScale = Math.max(targetScale, fitScale * 1.5);
 
+  // Invalidate any zoom still in flight from a previously opened table so
+  // it can't keep overriding this one's scroll position after the fact.
+  zoomToken++;
+  const myToken = zoomToken;
+  if (pendingZoomTimeout) {
+    clearTimeout(pendingZoomTimeout);
+    pendingZoomTimeout = null;
+  }
+
   // Show the whole map first
   mapImage.style.width = (IMAGE_WIDTH * fitScale) + "px";
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
 
   // Give people a moment to see the whole map before zooming in
-  setTimeout(() => {
+  pendingZoomTimeout = setTimeout(() => {
+    if (myToken !== zoomToken) return; // superseded by a newer zoom
 
     const startTime = performance.now();
 
     function frame(now) {
+      if (myToken !== zoomToken) return; // superseded — stop immediately
+
       const progress = Math.min((now - startTime) / ZOOM_DURATION, 1);
       const eased = easeInOutCubic(progress);
 
