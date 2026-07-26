@@ -356,49 +356,73 @@ const TABLE_COORDS = {
   "21": { x: 2091, y: 5042 }, "22": { x: 2910, y: 5042 }
 };
 
+// Hardcoded actual pixel size of the master map image (measured directly —
+// not read from the browser's naturalWidth/naturalHeight, which can be 0 or
+// unreliable depending on load timing). This is the exact coordinate space
+// TABLE_COORDS above was measured against.
+const IMAGE_WIDTH = 4961;
+const IMAGE_HEIGHT = 7017;
+
 // How long the whole map is shown before zooming starts (ms)
 const HOLD_DURATION = 2000;
 // How long the zoom-in animation itself takes (ms)
 const ZOOM_DURATION = 1400;
-// How far to zoom in, relative to the whole-map fit width
-const ZOOM_FACTOR = 3;
+// How many pixels of the ORIGINAL image should be visible across the
+// container's width once zoomed in on a table. This — not a multiple of
+// the overview scale — is what determines the zoom level. It matters
+// because the image is tall/narrow (portrait) while the map container is
+// wide/short (landscape): the "whole map" overview scale is dictated by
+// height, and multiplying that small number by a factor left almost no
+// room to scroll horizontally, which is why every table used to appear to
+// land at nearly the same X position while only Y moved. Deriving the
+// zoom scale from a fixed image-space width instead guarantees a proper,
+// independent scroll range on both axes for every table.
+const TABLE_VIEW_WIDTH = 1400;
 
 function easeInOutCubic(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-// Width needed to fit the ENTIRE map inside the modal (both dimensions),
+// Scale needed to fit the ENTIRE map inside the modal (both dimensions),
 // like object-fit: contain — this is the "whole map" starting view.
-function getFitWidth() {
+function getFitScale() {
   const containerWidth = mapModal.clientWidth;
   const containerHeight = mapModal.clientHeight;
-  const naturalWidth = mapImage.naturalWidth || containerWidth;
-  const naturalHeight = mapImage.naturalHeight || containerHeight;
-  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-  return naturalWidth * fitScale;
+  return Math.min(containerWidth / IMAGE_WIDTH, containerHeight / IMAGE_HEIGHT);
+}
+
+function getFitWidth() {
+  return IMAGE_WIDTH * getFitScale();
 }
 
 // Shows the whole map for HOLD_DURATION ms, then smoothly scales the image
-// up from the fit scale to fit-scale * ZOOM_FACTOR. On every single frame,
-// the scroll position is recalculated straight from this table's x/y
-// coordinates at the CURRENT scale of that frame — never from a cached
-// start/end pixel offset — so the map zooms in as if that exact point is
-// pinned under the center of the screen the whole time. Because every
-// frame's target is derived independently from coords.x / coords.y, each
-// table zooms to its own correct spot regardless of which one was shown
-// previously.
+// up from the whole-map fit scale to a zoom scale computed independently
+// (see TABLE_VIEW_WIDTH above). On every single frame, the scroll position
+// is recalculated straight from this table's x/y coordinates at the
+// CURRENT scale of that frame — never from a cached start/end pixel
+// offset — so the map zooms in as if that exact point is pinned under the
+// center of the screen the whole time. Because every frame's target is
+// derived independently from coords.x / coords.y and the scale is always
+// large enough to leave real scroll range on both axes, each table zooms
+// to its own correct spot on both X and Y, regardless of which one was
+// shown previously.
 function animateZoomToTable(coords) {
 
   const containerWidth = mapModal.clientWidth;
   const containerHeight = mapModal.clientHeight;
-  const naturalWidth = mapImage.naturalWidth;
-  const naturalHeight = mapImage.naturalHeight;
 
-  const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-  const targetScale = fitScale * ZOOM_FACTOR;
+  const fitScale = getFitScale();
+
+  // Zoom scale is derived from a fixed image-space crop width, not from
+  // fitScale — this is what keeps X and Y both properly scrollable
+  // regardless of the image's aspect ratio vs the container's.
+  let targetScale = containerWidth / TABLE_VIEW_WIDTH;
+  // Safety net: always zoom in noticeably from the overview, even on an
+  // unusually shaped container.
+  targetScale = Math.max(targetScale, fitScale * 1.5);
 
   // Show the whole map first
-  mapImage.style.width = (naturalWidth * fitScale) + "px";
+  mapImage.style.width = (IMAGE_WIDTH * fitScale) + "px";
   mapModal.scrollLeft = 0;
   mapModal.scrollTop = 0;
 
@@ -413,7 +437,7 @@ function animateZoomToTable(coords) {
 
       // Scale grows smoothly from fitScale to targetScale
       const currentScale = fitScale + (targetScale - fitScale) * eased;
-      mapImage.style.width = (naturalWidth * currentScale) + "px";
+      mapImage.style.width = (IMAGE_WIDTH * currentScale) + "px";
 
       // Recompute this table's on-screen position at the current scale,
       // and keep it centered — bounds are re-read every frame since the
