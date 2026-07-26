@@ -337,14 +337,10 @@ const mapModal = document.getElementById("mapModal");
 const mapImage = document.getElementById("mapImage");
 
 function openMap() {
-
-    mapOverlay.classList.add("active");
-
-    mapImage.style.width = getFitWidth() + "px";
-
-    mapModal.scrollLeft = 0;
-    mapModal.scrollTop = 0;
-
+  mapOverlay.classList.add("active");
+  mapImage.style.width = getFitWidth() + "px";
+  mapModal.scrollLeft = 0;
+  mapModal.scrollTop = 0;
 }
 
 function closeMap() {
@@ -402,104 +398,70 @@ function computeMaxCenterableScale(coords, containerWidth, containerHeight, natu
 // further — this only sets the starting point for them.
 function animateZoomToTable(coords) {
 
-    const containerWidth = mapModal.clientWidth;
-    const containerHeight = mapModal.clientHeight;
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
 
-    const naturalWidth = mapImage.naturalWidth;
-    const naturalHeight = mapImage.naturalHeight;
+  const naturalWidth = mapImage.naturalWidth;
+  const naturalHeight = mapImage.naturalHeight;
 
-    // Whole-map width
-    const fitWidth = getFitWidth();
+  // Whole-map width
+  const fitWidth = getFitWidth();
 
-    // Final zoom width
-    const finalWidth = fitWidth * ZOOM_FACTOR;
+  // Final zoom width
+  const finalWidth = fitWidth * ZOOM_FACTOR;
 
-    // Show whole map first
-    mapImage.style.width = fitWidth + "px";
-    mapModal.scrollLeft = 0;
-    mapModal.scrollTop = 0;
+  // Show whole map first
+  mapImage.style.width = fitWidth + "px";
+  mapModal.scrollLeft = 0;
+  mapModal.scrollTop = 0;
 
-    // Give people a moment to see the whole map
-    setTimeout(() => {
+  // Give people a moment to see the whole map
+  setTimeout(() => {
 
-        // Instantly zoom
-        mapImage.style.width = finalWidth + "px";
+    // Instantly zoom
+    mapImage.style.width = finalWidth + "px";
 
-        // Wait for browser layout
-        requestAnimationFrame(() => {
+    // Wait for browser layout
+    requestAnimationFrame(() => {
 
-            const scale = finalWidth / naturalWidth;
+      const scale = finalWidth / naturalWidth;
 
-            const targetX =
-                coords.x * scale - containerWidth / 2;
+      const targetX = coords.x * scale - containerWidth / 2;
+      const targetY = coords.y * scale - containerHeight / 2;
 
-            const targetY =
-                coords.y * scale - containerHeight / 2;
+      const maxScrollX = mapModal.scrollWidth - containerWidth;
+      const maxScrollY = mapModal.scrollHeight - containerHeight;
 
-            const maxScrollX =
-                mapModal.scrollWidth - containerWidth;
+      const endX = Math.max(0, Math.min(targetX, maxScrollX));
+      const endY = Math.max(0, Math.min(targetY, maxScrollY));
 
-            const maxScrollY =
-                mapModal.scrollHeight - containerHeight;
+      const startX = mapModal.scrollLeft;
+      const startY = mapModal.scrollTop;
 
-            const endX =
-                Math.max(0, Math.min(targetX, maxScrollX));
+      const startTime = performance.now();
 
-            const endY =
-                Math.max(0, Math.min(targetY, maxScrollY));
+      function animate(now) {
+        const progress = Math.min((now - startTime) / ZOOM_DURATION, 1);
+        const eased = easeInOutCubic(progress);
 
-            const startX = mapModal.scrollLeft;
-            const startY = mapModal.scrollTop;
+        mapModal.scrollLeft = startX + (endX - startX) * eased;
+        mapModal.scrollTop = startY + (endY - startY) * eased;
 
-            const startTime = performance.now();
+        if (progress < 1) requestAnimationFrame(animate);
+      }
 
-            function animate(now) {
+      requestAnimationFrame(animate);
 
-                const progress = Math.min(
-                    (now - startTime) / ZOOM_DURATION,
-                    1
-                );
+    });
 
-                const eased = easeInOutCubic(progress);
+  }, 300);
 
-                mapModal.scrollLeft =
-                    startX + (endX - startX) * eased;
-
-                mapModal.scrollTop =
-                    startY + (endY - startY) * eased;
-
-                if (progress < 1)
-                    requestAnimationFrame(animate);
-
-            }
-
-            requestAnimationFrame(animate);
-
-        });
-
-    }, 300);
-
-}
-
-    if (t < 1) {
-  requestAnimationFrame(frame);
 }
 
 function focusMapOnTable(tableNum) {
+  mapOverlay.classList.add("active");
 
-    mapOverlay.classList.add("active");
-
-    const coords = TABLE_COORDS[String(tableNum)];
-
-    if (!coords) {
-        openMap();
-        return;
-    }
-
-animateZoomToTable(coords);
-}
-
-}
+  const coords = TABLE_COORDS[String(tableNum)];
 
   if (!coords) {
     openMap();
