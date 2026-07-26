@@ -158,28 +158,6 @@
     color: #f0e6dc;
   }
 
-  .view-on-map-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    color: #f0e6dc;
-    font-family: "Poppins", sans-serif;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.3px;
-    padding: 5px 10px;
-    border-radius: 14px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-  }
-
-  .view-on-map-btn:hover {
-    background-color: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.55);
-  }
-
   .no-results {
     font-family: "Poppins", sans-serif;
     font-size: 15px;
@@ -318,12 +296,8 @@ document.getElementById("search").addEventListener("input", function() {
         <div class="guest-name">${g.name}</div>
         <div class="guest-table-row">
           <span class="guest-table">Mesa ${g.table}</span>
-          <button class="view-on-map-btn">Ver su mesa en el mapa</button>
         </div>
       `;
-      card.querySelector(".view-on-map-btn").addEventListener("click", () => {
-        focusMapOnTable(g.table);
-      });
       resultDiv.appendChild(card);
     });
   } else {
@@ -331,10 +305,23 @@ document.getElementById("search").addEventListener("input", function() {
   }
 });
 
-// Map modal logic
+// Map modal logic — simple whole-map viewer, no per-table zoom
 const mapOverlay = document.getElementById("mapOverlay");
 const mapModal = document.getElementById("mapModal");
 const mapImage = document.getElementById("mapImage");
+
+// Hardcoded actual pixel size of the master map image, used to fit the
+// whole image inside the modal (object-fit: contain style) regardless of
+// the browser's own naturalWidth/naturalHeight timing.
+const IMAGE_WIDTH = 4961;
+const IMAGE_HEIGHT = 7017;
+
+function getFitWidth() {
+  const containerWidth = mapModal.clientWidth;
+  const containerHeight = mapModal.clientHeight;
+  const fitScale = Math.min(containerWidth / IMAGE_WIDTH, containerHeight / IMAGE_HEIGHT);
+  return IMAGE_WIDTH * fitScale;
+}
 
 function openMap() {
   mapOverlay.classList.add("active");
@@ -345,132 +332,6 @@ function openMap() {
 
 function closeMap() {
   mapOverlay.classList.remove("active");
-}
-
-// Exact pixel coordinates of each table's center on the source image.
-const TABLE_COORDS = {
-  "1":  { x: 514,  y: 1641 }, "2":  { x: 1239, y: 1599 }, "3":  { x: 2058, y: 1599 }, "4":  { x: 2867, y: 1624 }, "5":  { x: 3669, y: 1599 },
-  "6":  { x: 497,  y: 2491 }, "7":  { x: 1256, y: 2475 }, "8":  { x: 2058, y: 2508 }, "9":  { x: 2884, y: 2525 }, "10": { x: 3644, y: 2525 },
-  "11": { x: 497,  y: 3434 }, "12": { x: 1273, y: 3409 }, "13": { x: 2032, y: 3451 }, "14": { x: 2910, y: 3451 }, "15": { x: 3644, y: 3434 },
-  "16": { x: 514,  y: 4192 }, "17": { x: 1299, y: 4192 }, "18": { x: 2091, y: 4192 }, "19": { x: 2867, y: 4192 }, "20": { x: 3669, y: 4192 },
-  "21": { x: 2091, y: 5042 }, "22": { x: 2910, y: 5042 }
-};
-
-// Hardcoded actual pixel size of the master map image (measured directly —
-// not read from the browser's naturalWidth/naturalHeight, which can be 0 or
-// unreliable depending on load timing). This is the exact coordinate space
-// TABLE_COORDS above was measured against.
-const IMAGE_WIDTH = 4961;
-const IMAGE_HEIGHT = 7017;
-
-// How long the whole map is shown before zooming starts (ms)
-const HOLD_DURATION = 2000;
-// How long the zoom-in animation itself takes (ms)
-const ZOOM_DURATION = 1400;
-// How many pixels of the ORIGINAL image should be visible across the
-// container's width once zoomed in on a table. This — not a multiple of
-// the overview scale — is what determines the zoom level. It matters
-// because the image is tall/narrow (portrait) while the map container is
-// wide/short (landscape): the "whole map" overview scale is dictated by
-// height, and multiplying that small number by a factor left almost no
-// room to scroll horizontally, which is why every table used to appear to
-// land at nearly the same X position while only Y moved. Deriving the
-// zoom scale from a fixed image-space width instead guarantees a proper,
-// independent scroll range on both axes for every table.
-const TABLE_VIEW_WIDTH = 1400;
-
-function easeInOutCubic(t) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-// Scale needed to fit the ENTIRE map inside the modal (both dimensions),
-// like object-fit: contain — this is the "whole map" starting view.
-function getFitScale() {
-  const containerWidth = mapModal.clientWidth;
-  const containerHeight = mapModal.clientHeight;
-  return Math.min(containerWidth / IMAGE_WIDTH, containerHeight / IMAGE_HEIGHT);
-}
-
-function getFitWidth() {
-  return IMAGE_WIDTH * getFitScale();
-}
-
-// Shows the whole map for HOLD_DURATION ms, then smoothly scales the image
-// up from the whole-map fit scale to a zoom scale computed independently
-// (see TABLE_VIEW_WIDTH above). On every single frame, the scroll position
-// is recalculated straight from this table's x/y coordinates at the
-// CURRENT scale of that frame — never from a cached start/end pixel
-// offset — so the map zooms in as if that exact point is pinned under the
-// center of the screen the whole time. Because every frame's target is
-// derived independently from coords.x / coords.y and the scale is always
-// large enough to leave real scroll range on both axes, each table zooms
-// to its own correct spot on both X and Y, regardless of which one was
-// shown previously.
-function animateZoomToTable(coords) {
-
-  const containerWidth = mapModal.clientWidth;
-  const containerHeight = mapModal.clientHeight;
-
-  const fitScale = getFitScale();
-
-  // Zoom scale is derived from a fixed image-space crop width, not from
-  // fitScale — this is what keeps X and Y both properly scrollable
-  // regardless of the image's aspect ratio vs the container's.
-  let targetScale = containerWidth / TABLE_VIEW_WIDTH;
-  // Safety net: always zoom in noticeably from the overview, even on an
-  // unusually shaped container.
-  targetScale = Math.max(targetScale, fitScale * 1.5);
-
-  // Show the whole map first
-  mapImage.style.width = (IMAGE_WIDTH * fitScale) + "px";
-  mapModal.scrollLeft = 0;
-  mapModal.scrollTop = 0;
-
-  // Give people a moment to see the whole map before zooming in
-  setTimeout(() => {
-
-    const startTime = performance.now();
-
-    function frame(now) {
-      const progress = Math.min((now - startTime) / ZOOM_DURATION, 1);
-      const eased = easeInOutCubic(progress);
-
-      // Scale grows smoothly from fitScale to targetScale
-      const currentScale = fitScale + (targetScale - fitScale) * eased;
-      mapImage.style.width = (IMAGE_WIDTH * currentScale) + "px";
-
-      // Recompute this table's on-screen position at the current scale,
-      // and keep it centered — bounds are re-read every frame since the
-      // scrollable content size changes as the image grows.
-      const maxScrollX = mapModal.scrollWidth - containerWidth;
-      const maxScrollY = mapModal.scrollHeight - containerHeight;
-
-      const targetX = coords.x * currentScale - containerWidth / 2;
-      const targetY = coords.y * currentScale - containerHeight / 2;
-
-      mapModal.scrollLeft = Math.max(0, Math.min(targetX, maxScrollX));
-      mapModal.scrollTop = Math.max(0, Math.min(targetY, maxScrollY));
-
-      if (progress < 1) requestAnimationFrame(frame);
-    }
-
-    requestAnimationFrame(frame);
-
-  }, HOLD_DURATION);
-
-}
-
-function focusMapOnTable(tableNum) {
-  mapOverlay.classList.add("active");
-
-  const coords = TABLE_COORDS[String(tableNum)];
-
-  if (!coords) {
-    openMap();
-    return;
-  }
-
-  animateZoomToTable(coords);
 }
 
 document.getElementById("openMap").addEventListener("click", openMap);
